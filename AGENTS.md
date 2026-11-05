@@ -29,6 +29,7 @@ node qa/run.mjs   # 言葉のデータ（答えが1つかを JMdict の全部の
 - 応援は Ko-fi（https://ko-fi.com/satouaaaaa）へのただのリンクだけ。今日の3問・上級を初めて終えて全部一発（まちがい・ヒントなし）のときだけ、結果の画面の下に1行（共有フォルダ kofi/app-guide.md）。遊ぶのは無料のまま、有料版は置かない。
 - 外へ通信しない。外から読むのは Google Fonts の文字だけ（CSP の `connect-src 'self'` を広げない）。記録は遊ぶ人のブラウザ（localStorage）だけ。
 - 同じ日はどの端末でも同じ問題にする：乱数は `sort` の比較の中で引かない（QA が見る）。少し遅れて動く処理（setTimeout）は、画面が替わっていたら何もしない。
+- 見やすさ：`</head>` の前の見やすさの設定（`<!-- a11y:begin -->`〜`end`）は shared-workflows `template/a11y/a11y.html` の写しで、ここでは直さない。`qa/a11y.mjs` も `template/qa/a11y.mjs` の写し（画面の足し方・許しは `qa/a11y.json` に理由つき）。色だけで分けない（場所が合った字は ✓ の印と「場所が合った字」の名前、できた言葉は二重線と「✓ できた」、取れなかった星は ☆、進み具合の点は ✓ と高さ。「色の見分けを助ける」では合った字を青 `#0072B2`・できた言葉を朱 `#D55E00` に替える）・コントラスト 4.5:1・知らせは `#live`（role=status）・「動きを減らす」で揺れと振動を止める・決めつけの言葉を使わない（shared-workflows `routines/game-dev.md`「だれでも遊べるように」）。
 - 押せる所は高さ44px以上、幅320pxでも8字のますと札はそれぞれ1行（QA が見る）。機能を足す・直すたびに `qa/run.mjs` に検査を足す。乱数で組む部分は何千回も作って確かめる（shared-workflows `incidents/2026-10-31-roppo-empty-village.md`）。
 - PWA（`manifest.webmanifest`・`sw.js`・`icon-*.png`）：画面のファイルを足したら `sw.js` の `SHELL` にも足し、中身を大きく変えたら `CACHE` の版を上げる。アイコンは `node tools/make-icons.cjs`、SNS 用の絵 `og.png` は `node tools/make-og.cjs`（今日の問題を入れない）。
 - 公開リポジトリなので、個人情報・鍵を入れない。
