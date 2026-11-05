@@ -136,8 +136,8 @@ const jstNow = () => new Date(Date.now() + 9 * 3600e3);
 const todayKey = () => jstNow().toISOString().slice(0, 10);
 const dayNo = (k) => Math.round((Date.parse(k) - Date.parse(EPOCH)) / 864e5) + 1;
 // 今日の3問：やさしい（4字）・ふつう（5字）・むずかしい（6字）。上級：7字と8字（ヒントなし）
-const dailyList = (k) => [0, 1, 2].map((lv) => ({ lv, idx: T.wordOf(lv, dayNo(k)), seed: T.seedOf(k + ":d:" + lv) }));
-const hardList = (k) => [3, 4].map((lv) => ({ lv, idx: T.wordOf(lv, dayNo(k)), seed: T.seedOf(k + ":h:" + lv) }));
+const dailyList = (k) => [0, 1, 2].map((lv) => ({ lv, idx: T.wordOf(lv, dayNo(k) - 1), seed: T.seedOf(k + ":d:" + lv) }));
+const hardList = (k) => [3, 4].map((lv) => ({ lv, idx: T.wordOf(lv, dayNo(k) - 1), seed: T.seedOf(k + ":h:" + lv) }));
 const probOf = (it) => T.make(it.lv, it.idx, it.seed);
 // ★：まちがい＋ヒントが0回で3、2回までで2、それより多いと1
 const starsOf = (r) => { const n = r.m + (r.h || 0); return n === 0 ? 3 : n <= 2 ? 2 : 1; };
@@ -309,15 +309,16 @@ function hint() {
 function solve() {
   if (!same(load().runs[MODE])) { toast("別の画面で先に進んでいます"); return play(); }
   cur.done = true; buzz([10, 40, 10]);
-  const p = cur.p, rec = { m: cur.miss, h: cur.hints }, st = starsOf(rec);
+  const p = cur.p, rec = { m: cur.miss, h: cur.hints };
   let saved = false;
-  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; saved = true; r.res.push(rec); r.cur = null; s.words++; s.seen[p.w[1]] = (s.seen[p.w[1]] || 0) + 1; });
+  // 別のタブで同じ問題のまちがい・ヒントが多く保存されていたら、多いほうを記録する（古いタブで★を増やさない）
+  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; saved = true; if (r.cur && r.cur.i === cur.i) { rec.m = Math.max(rec.m, r.cur.miss || 0); rec.h = Math.max(rec.h, r.cur.hints || 0); } r.res.push(rec); r.cur = null; s.words++; s.seen[p.w[1]] = (s.seen[p.w[1]] || 0) + 1; });
   if (!saved) { toast("別の画面で先に進んでいます"); return play(); }
-  paint();
-  const r = s.runs[MODE], fin = r && r.res.length >= r.list.length;
+  cur.miss = rec.m; cur.hints = rec.h; paint();
+  const st = starsOf(rec), r = s.runs[MODE], fin = r && r.res.length >= r.list.length;
   $("after").innerHTML = `<div class="verdict" role="status">
     <div class="hd">できた！ ${starStr(st)}</div>
-    <p class="note">${cur.miss ? `${cur.miss}回まちがえて作りました。` : "一度もまちがえずに作りました。"}${cur.hints ? `ヒント${cur.hints}回。` : ""}</p>
+    <p class="note">${rec.m ? `${rec.m}回まちがえて作りました。` : "一度もまちがえずに作りました。"}${rec.h ? `ヒント${rec.h}回。` : ""}</p>
     <button class="main" id="next">${fin ? "結果を見る" : "次の問題へ"}</button></div>`;
   $("next").onclick = play;
   setTimeout(() => { if ($("next") && cur.done) $("next").scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 60);

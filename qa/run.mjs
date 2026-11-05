@@ -42,6 +42,10 @@ check("終えた回を消すのは同じ回のときだけ・0時を過ぎたホ
 check("別のタブで今日の分を終えたあと、古い画面から今日・上級をもう一度始めない（2026-11-04 CodeRabbit）", /\(mode === "d" && s\.days\[k\]\) \|\| \(mode === "h" && s\.hdays\[k\]\)\) return;/.test(html));
 check("README の URL のすぐ後ろに全角の字を続けない（Link check が URL の一部と読む。2026-11-04）", !/https?:\/\/[\x21-\x7e]*[^\x00-\x7f]/.test(readFileSync(new URL("../README.md", import.meta.url), "utf8").replace(/\]\(https?:\/\/[^)\s]+\)/g, "").replace(/<https?:\/\/[^>\s]+>/g, "")));
 check("別のタブで先に進んだ並べ方を、古いタブの並べ方で上書きしない（2026-11-04 CodeRabbit）", /r\.cur\.i === cur\.i && r\.cur\.moves > cur\.moves\)\) r\.cur =/.test(html));
+{ // ひな形を写したリポジトリで、README・AGENTS.md に前のゲームの名前や URL が残らない（2026-11-05 CodeRabbit）
+  const docs = ["README.md", "AGENTS.md", "manifest.webmanifest", "sw.js"].map((f) => [f, readFileSync(path.join(root, f), "utf8")]);
+  const left = docs.filter(([, t]) => /しりとり|shiritori|github\.io\/(?!kotoba-narabe\/)[a-z0-9-]+\//.test(t)).map(([f]) => f);
+  check("README・AGENTS.md・manifest・sw.js はこのゲームの名前と URL だけ（写し元のゲームが残らない）", left.length === 0 && /^# ことばならべ/.test(docs[0][1]) && /satou-aaaaa\.github\.io\/kotoba-narabe\//.test(docs[0][1]), left.join(",")); }
 check("JMdict の出どころ（CC BY-SA 4.0）を遊び方と README に書く", /JMdict（© EDRDG、CC BY-SA 4\.0）/.test(html) && /CC BY-SA 4\.0/.test(readFileSync(path.join(root, "README.md"), "utf8")));
 const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]).filter((u) => !/^https:\/\/fonts\.googleapis\.com(\/|$)|^https:\/\/ko-fi\.com\/satouaaaaa$/.test(u));
 check("外から読むのは文字（Google Fonts）だけ。スクリプト・広告・解析を入れない", ext.length === 0, ext.join(","));
@@ -66,10 +70,12 @@ check("画面にお笑いの言葉を入れない（本物っぽく）", !/お�
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const isNoise = (t) => /fonts\.(googleapis|gstatic)\.com|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(t);
 const errors = [];
+const FIXED = new Date(new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) + "T03:00:00Z");
 async function newPage(w = 390, h = 844) {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
   page.on("pageerror", (e) => errors.push(e.stack));
   page.on("console", (m) => { if (m.type() === "error" && !isNoise(m.text())) errors.push(m.text()); });
+  await page.clock.setFixedTime(FIXED); // 時計を今日の昼（日本時間）に止める。QA の途中で0時をまたいでも「今日」が変わらない（2026-11-05 CodeRabbit）
   await page.goto(url);
   await page.evaluate(() => localStorage.clear()); await page.reload();
   return page;
@@ -97,10 +103,13 @@ try {
       if (sig === prev) out.same++; prev = sig;
     }
     out.d1201 = JSON.stringify(g.dailyList("2026-12-01").map(g.probOf));
+    // 1日目から1周のあいだ、どの難しさも同じ言葉が出ない（1日目は周の最初の言葉）
+    out.cycle = [0, 1, 2, 3, 4].filter((lv) => { const n = g.T.W[g.T.LV[lv].key].length, s = new Set(); for (let d = 0; d < n; d++) { const k = new Date(Date.parse("2026-11-05") + d * 864e5).toISOString().slice(0, 10); s.add((lv < 3 ? g.dailyList(k)[lv] : g.hardList(k)[lv - 3]).idx); } return s.size !== n || (lv < 3 ? g.dailyList("2026-11-05")[lv] : g.hardList("2026-11-05")[lv - 3]).idx !== g.T.wordOf(lv, 0); });
     return out;
   });
   check("今日の3問は毎日4字・5字・6字、上級は7字と8字（3年分）", sel.bad.length === 0, sel.bad.slice(0, 3).join(","));
   check("前の日と同じ言葉にならない（3年分）", sel.same === 0);
+  check("1日目から1周のあいだ、どの難しさも同じ言葉が出ない（1日目は周の最初の言葉。2026-11-05 CodeRabbit）", sel.cycle.length === 0, sel.cycle.join(","));
   { const ctx = await browser.newContext(); const p2 = await ctx.newPage(); await p2.goto(url);
     const d2 = await p2.evaluate(() => { const g = window.__kn; return JSON.stringify(g.dailyList("2026-12-01").map(g.probOf)); });
     await ctx.close();
@@ -166,13 +175,15 @@ try {
   await page.click("#back"); await page.click("#go-h");
   check("2回目に結果を開いても Ko-fi のひとことは出ない", (await page.locator(".kofi").count()) === 0);
   await page.click("#back");
-  // 練習：記録の日を増やさず、言葉帳には載る
+  // 練習：記録の日を増やさず、言葉帳には載る（練習の言葉は乱数なので、今日の言葉と同じでも数が合うように数える）
   await page.click("#go-p"); await page.locator(".lv button").nth(1).click();
+  const pw = (await curT(page)).p.w[1], seen0 = await page.evaluate(() => Object.keys(window.__kn.load().seen));
+  const expSeen = seen0.length + (seen0.includes(pw) ? 0 : 1);
   await solveNow(page); await page.click("#next");
   const after = await page.evaluate(() => { const s = window.__kn.load(); return { days: Object.keys(s.days).length, words: s.words, seen: Object.keys(s.seen).length }; });
-  check("練習は今日の記録を増やさず、作った言葉と言葉帳には入る", after.days === 1 && after.words === 6 && after.seen === 6 && (await page.locator(".share").count()) === 0);
+  check("練習は今日の記録を増やさず、作った言葉と言葉帳には入る", after.days === 1 && after.words === 6 && after.seen === expSeen && (await page.locator(".share").count()) === 0);
   await page.click("#go-dex");
-  check("言葉帳に作った言葉と字の数ごとの数が出る", (await page.locator(".dex div").count()) === 6 && (await page.textContent(".dex")).includes(c.p.w[0]) && (await page.textContent("h1")).includes("6語"));
+  check("言葉帳に作った言葉と字の数ごとの数が出る", (await page.locator(".dex div").count()) === expSeen && (await page.textContent(".dex")).includes(c.p.w[0]) && (await page.textContent("h1")).includes(`${expSeen}語`));
   await page.close();
 
   // 5. スマホ幅：はみ出さない・押せる所は44px以上・8字でもますは1行
@@ -193,6 +204,13 @@ try {
     await pv.reload(); await pv.click("#go-d");
     check("壊れた途中経過（ちがう字が緑・同じ札が2回・ない札・形がちがう）は使わず、はじめから", broken.every((x) => x === false) && (await curT(pv)).slots.every((t) => t === null) && (await curT(pv)).miss === 0, JSON.stringify(broken));
     await pv.close(); }
+  { // 別のタブで同じ問題のまちがいが多く保存されていたら、古いタブで答えても多いほうを記録する
+    const pz = await newPage(); await pz.click("#howto-ok"); await pz.click("#go-d");
+    await pz.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.d.cur = { i: 0, slots: [null, null, null, null], lock: [false, false, false, false], miss: 3, hints: 1, kan: false, moves: 999 }; localStorage.setItem(k, JSON.stringify(s)); }, KEY);
+    await solveNow(pz);
+    const rz = await pz.evaluate(() => window.__kn.load().runs.d.res[0]);
+    check("別のタブで保存したまちがい・ヒントの数を、古いタブで答えても消さない（★を増やさない。2026-11-05 CodeRabbit）", rz && rz.m === 3 && rz.h === 1 && (await pz.locator(".verdict .stars .off").textContent()).length === 2, JSON.stringify(rz));
+    await pz.close(); }
   { // 保存できないブラウザでも遊べる
     const pb = await browser.newPage({ viewport: { width: 390, height: 844 } });
     pb.on("pageerror", (e) => errors.push(e.message));
