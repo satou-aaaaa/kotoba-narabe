@@ -51,7 +51,7 @@ check("JMdict の出どころ（CC BY-SA 4.0）を遊び方と README に書く"
 const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]).filter((u) => !/^https:\/\/fonts\.googleapis\.com(\/|$)|^https:\/\/ko-fi\.com\/satouaaaaa$/.test(u));
 check("外から読むのは文字（Google Fonts）だけ。スクリプト・広告・解析を入れない", ext.length === 0, ext.join(","));
 check("CSP で通信先を自分だけにしている", /connect-src 'self'/.test(html) && !/connect-src[^;"]*https/.test(html));
-check("Math.random は練習の問題選びだけ（今日の3問・上級は日付の種）", (html.match(/Math\.random/g) || []).length === 2 && /mode === "h" \? hardList\(k\) : \[\{ lv: opt, idx: Math\.floor\(Math\.random\(\)/.test(html) && !/Math\.random/.test(readFileSync(path.join(root, "gen.js"), "utf8")));
+check("Math.random は練習の問題選びだけ（今日の3問・上級は日付の種）", (html.match(/Math\.random/g) || []).length === 2 && /mode === "h" \? hardList\(k\) : \[\{ lv: opt, idx: T\.okIdx\(opt\)\[Math\.floor\(Math\.random\(\)/.test(html) && !/Math\.random/.test(readFileSync(path.join(root, "gen.js"), "utf8")));
 check("画面にお笑いの言葉を入れない（本物っぽく）", !/お笑い|ギャグ|ボケ|ツッコミ|なんでやねん|（うそ）/.test(html));
 { const og = (k) => (html.match(new RegExp(`<meta (?:property|name)="${k}" content="([^"]+)"`)) || [])[1] || "";
   const png = readFileSync(path.join(root, "og.png"));
@@ -104,8 +104,8 @@ try {
       if (sig === prev) out.same++; prev = sig;
     }
     out.d1201 = JSON.stringify(g.dailyList("2026-12-01").map(g.probOf));
-    // 1日目から1周のあいだ、どの難しさも同じ言葉が出ない（1日目は周の最初の言葉）
-    out.cycle = [0, 1, 2, 3, 4].filter((lv) => { const n = g.T.W[g.T.LV[lv].key].length, s = new Set(); for (let d = 0; d < n; d++) { const k = new Date(Date.parse("2026-11-05") + d * 864e5).toISOString().slice(0, 10); s.add((lv < 3 ? g.dailyList(k)[lv] : g.hardList(k)[lv - 3]).idx); } return s.size !== n || (lv < 3 ? g.dailyList("2026-11-05")[lv] : g.hardList("2026-11-05")[lv - 3]).idx !== g.T.wordOf(lv, 0); });
+    // 1日目から1周のあいだ、どの難しさも同じ言葉が出ない（1日目は周の最初の言葉。1周は性別に寄った言葉を外した数）
+    out.cycle = [0, 1, 2, 3, 4].filter((lv) => { const n = g.T.okIdx(lv).length, s = new Set(); for (let d = 0; d < n; d++) { const k = new Date(Date.parse("2026-11-05") + d * 864e5).toISOString().slice(0, 10); s.add((lv < 3 ? g.dailyList(k)[lv] : g.hardList(k)[lv - 3]).idx); } return s.size !== n || (lv < 3 ? g.dailyList("2026-11-05")[lv] : g.hardList("2026-11-05")[lv - 3]).idx !== g.T.wordOf(lv, 0); });
     return out;
   });
   check("今日の3問は毎日4字・5字・6字、上級は7字と8字（3年分）", sel.bad.length === 0, sel.bad.slice(0, 3).join(","));
@@ -115,6 +115,56 @@ try {
     const d2 = await p2.evaluate(() => { const g = window.__kn; return JSON.stringify(g.dailyList("2026-12-01").map(g.probOf)); });
     await ctx.close();
     check("同じ日は別のブラウザで開いても同じ3問", sel.d1201 === d2); }
+
+  // 3b. 性別に寄った言葉（gender-ng.js）：2026-11-07 から選ばない。それより前の日は main の版と同じ
+  {
+    const src = readFileSync(path.join(root, "qa/a11y.mjs"), "utf8"), m = src.match(/const WORDS = \[([\s\S]*?)\n\];/);
+    const words = m ? [...m[1].matchAll(/\["([^"]+)",/g)].map((x) => x[1]) : [];
+    check("gender-ng.js は qa/a11y.mjs（shared-workflows template/qa/a11y.mjs の写し）の WORDS と同じ一覧", words.length > 30 && JSON.stringify(words) === JSON.stringify(T.NG), `${words.length}/${T.NG.length}`);
+    check("区切りの日は 2026-11-07", T.CUTOFF === "2026-11-07");
+    // main の版をそのまま一時フォルダに出して開き、区切りの日より前の400日分（〜2026-11-06）の今日の3問・上級を比べる
+    const { execSync } = await import("node:child_process"), { mkdtempSync, rmSync } = await import("node:fs"), os = await import("node:os");
+    const git = (c) => execSync(c, { cwd: root, stdio: ["ignore", "pipe", "ignore"] });
+    let ref = "origin/main";
+    try { git(`git rev-parse --verify ${ref}`); } catch { try { git("git fetch --depth=1 origin main"); ref = "FETCH_HEAD"; } catch { ref = null; } }
+    let same = null, detail = "main の版を取れなかった";
+    if (ref) {
+      const dir = mkdtempSync(path.join(os.tmpdir(), "kn-main-"));
+      execSync(`git archive ${ref} | tar -x -C ${JSON.stringify(dir)}`, { cwd: root, shell: "/bin/bash" });
+      const days = Array.from({ length: 400 }, (_, i) => new Date(Date.parse("2026-11-06") - i * 864e5).toISOString().slice(0, 10));
+      const grab = async (u) => { const pg = await browser.newPage(); await pg.goto(u); const r = await pg.evaluate((ds) => { const g = window.__kn; return ds.map((k) => JSON.stringify([g.dailyList(k).map(g.probOf), g.hardList(k).map(g.probOf)])); }, days); await pg.close(); return r; };
+      const a = await grab(pathToFileURL(path.join(dir, "index.html")).href), b = await grab(url);
+      const diff = days.filter((_, i) => a[i] !== b[i]);
+      same = diff.length === 0; detail = `${ref} と比べた。ちがう日：${diff.slice(0, 3).join(",")}`;
+      rmSync(dir, { recursive: true, force: true });
+    }
+    check("区切りの日より前（〜2026-11-06）の400日分の今日の3問・上級は main の版と1字も同じ", same === true, detail);
+    const fut = await page.evaluate(() => {
+      const g = window.__kn, bad = [];
+      for (let n = 0; n < 365 * 3; n++) {
+        const k = new Date(Date.parse("2026-11-07") + n * 864e5).toISOString().slice(0, 10);
+        const txt = JSON.stringify([g.dailyList(k).map(g.probOf), g.hardList(k).map(g.probOf)]);
+        if (g.T.NG.some((w) => txt.includes(w))) bad.push(k);
+      }
+      return bad;
+    });
+    check("2026-11-07 から3年分の今日の3問・上級に、性別に寄った言葉が出ない（表記・よみ・字の札をつないで探す）", fut.length === 0, fut.slice(0, 3).join(","));
+    const pp = await newPage();
+    const pr = await pp.evaluate(() => {
+      const g = window.__kn, bad = [], R = Math.random;
+      try {
+        for (let lv = 0; lv < 5; lv++) for (let i = 0; i < 300; i++) {
+          Math.random = i === 0 ? () => 0 : i === 1 ? () => 0.999999 : R;
+          g.startRun("p", lv); Math.random = R;
+          const p = g.probOf(g.load().runs.p.list[0]), txt = JSON.stringify(p);
+          if (g.T.NG.some((w) => txt.includes(w))) bad.push(p.w[0]);
+        }
+      } finally { Math.random = R; }
+      return bad;
+    });
+    await pp.close();
+    check("練習を何百回作っても（5つの難しさ×300回）、性別に寄った言葉が出ない", pr.length === 0, pr.slice(0, 3).join(","));
+  }
 
   // 4. 通しで遊ぶ
   check("初めて開くと遊び方が出る", await page.locator("#howto[open]").count() === 1);
