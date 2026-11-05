@@ -1,0 +1,60 @@
+{
+  "screens": [
+    {
+      "name": "今日の3問",
+      "click": [
+        "#go-d"
+      ]
+    },
+    {
+      "name": "今日の3問（ヒントで1字が合い、答えたあと）",
+      "click": [
+        "#go-d",
+        "#hint",
+        ".tiles button:not(.used)",
+        ".tiles button:not(.used)",
+        ".tiles button:not(.used)",
+        "#answer"
+      ]
+    },
+    {
+      "name": "練習",
+      "click": [
+        "#go-p"
+      ]
+    },
+    {
+      "name": "練習の上級（8字）",
+      "click": [
+        "#go-p",
+        ".lv button[data-lv=\"4\"]"
+      ]
+    },
+    {
+      "name": "言葉帳",
+      "click": [
+        "#go-dex"
+      ]
+    },
+    {
+      "name": "実績",
+      "click": [
+        "#go-ach"
+      ]
+    }
+  ],
+  "allowWords": [
+    {
+      "word": "看護婦",
+      "reason": "words.js は JMdict（辞書）の見出し語で、パズルの答えそのもの（手で直さない決まり）。外すと言葉の並びが変わり過去の日の問題も変わるので、ここでは直さず報告した。画面の文では使わない"
+    },
+    {
+      "word": "亭主",
+      "reason": "words.js は JMdict（辞書）の見出し語で、パズルの答えそのもの（手で直さない決まり）。外すと言葉の並びが変わり過去の日の問題も変わるので、ここでは直さず報告した。画面の文では使わない"
+    },
+    {
+      "word": "嫁",
+      "reason": "words.js の「花嫁（はなよめ）」に当たる。JMdict の見出し語でパズルの答え。外すと過去の日の問題が変わるので直さず報告した"
+    }
+  ]
+}
