@@ -138,6 +138,11 @@ try {
   n1 = await curT(page);
   const j0 = c.p.tiles.map((ch, j) => ch === c.ans[j]).indexOf(false);
   check("ヒント1回目で、左から1字が正しい場所に緑で置かれる", n1.hints === 1 && n1.lock[j0] === true && c.p.tiles[n1.slots[j0]] === c.ans[j0]);
+  { // 色だけで分けない（WCAG 1.4.1）：合った字は ✓ の印と読み上げの言葉、置いた字・空きも言葉で分かる。知らせは #live（role=status）に文字で出る
+    await page.waitForTimeout(80);
+    const a = await page.evaluate((j) => { const b = document.querySelector(`#slots button[data-j="${j}"]`), o = [...document.querySelectorAll("#slots button")].find((x) => !x.classList.contains("lock")); return { mark: getComputedStyle(b, "::after").content, lab: b.getAttribute("aria-label"), other: o ? o.getAttribute("aria-label") : "", live: (document.getElementById("live") || {}).textContent || "", role: (document.getElementById("live") || { getAttribute: () => "" }).getAttribute("role") }; }, j0);
+    check("合った字は色のほかに ✓ の印と「場所が合った字」の名前、空きは「空き」と読める（色だけで分けない）", a.mark.includes("✓") && a.lab.includes("場所が合った字") && /空き|押すと戻す/.test(a.other), JSON.stringify(a));
+    check("ヒントの知らせは読み上げの場所（#live、role=status）にも文字で出る", a.role === "status" && a.live.includes("字目は"), JSON.stringify(a)); }
   await page.click("#hint");
   n1 = await curT(page);
   check("ヒント2回目で漢字の書き方が出て、ヒントはもう押せない", n1.hints === 2 && n1.kan && (await page.textContent("#kan")).includes(c.p.w[0]) && (await page.locator("#hint[disabled]").count()) === 1);
@@ -149,7 +154,9 @@ try {
   await solveNow(page);
   n1 = await curT(page);
   check("答えの並びで答えるとできあがり、まちがい1＋ヒント2で★1、よみと漢字が出る", n1.done && (await page.locator(".verdict .stars .off").textContent()).length === 2 && (await page.textContent("#kan")).includes(c.p.w[1]) && (await page.locator("#slots.win").count()) === 1);
+  check("取れなかった星は ☆（色だけで分けない）・できた言葉は二重線と「できた」の言葉", (await page.locator(".verdict .stars .off").textContent()) === "☆☆" && (await page.textContent(".verdict .hd")).includes("できた") && (await page.evaluate(() => getComputedStyle(document.querySelector("#slots.win button")).borderStyle)) === "double");
   await page.click("#next");
+  check("進み具合の点は、終えた問題に ✓ が付き、今の問題は高さで分かる（色だけで分けない）", (await page.locator(".dots i.done").first().textContent()) === "✓" && (await page.evaluate(() => getComputedStyle(document.querySelector(".dots i.on")).height)) !== (await page.evaluate(() => getComputedStyle(document.querySelector(".dots i:not(.on):not(.done)")).height)));
   // 別のタブで先に進んでいたら、古い画面の答えは足さない
   await page.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.d.res.push({ m: 0, h: 0 }); localStorage.setItem(k, JSON.stringify(s)); }, KEY);
   await solveNow(page);
@@ -192,6 +199,19 @@ try {
   await page.click("#back"); await page.click("#go-dex");
   check("言葉帳に作った言葉と字の数ごとの数が出る", (await page.locator(".dex div").count()) === expSeen && (await page.textContent(".dex")).includes(c.p.w[0]) && (await page.textContent("h1")).includes(`${expSeen}語`));
   await page.close();
+
+  { // 動きを減らす（見やすさの設定 calm）：まちがえても揺らさず、振動もしない。色の見分けを助ける（cvd）：合った字は青（#0072B2）
+    const pc = await newPage(390, 844);
+    await pc.evaluate(() => { localStorage.setItem("a11y-v1", JSON.stringify({ calm: true, cvd: true })); localStorage.setItem("kotoba-narabe-v1", JSON.stringify({ v: 1, days: {}, hdays: {}, seen: {}, words: 0, runs: {}, tut: true, kofi: {}, ach: {} })); });
+    await pc.addInitScript(() => { window.__vib = 0; navigator.vibrate = () => { window.__vib++; return true; }; });
+    await pc.reload(); await pc.click("#go-d");
+    const cc = await curT(pc);
+    for (let x = 0; x < 4; x++) await pc.click(`#tiles button[data-t="${x}"]`);
+    await pc.click("#answer"); await pc.click("#hint");
+    const m = await pc.evaluate(() => ({ vib: window.__vib, bad: document.getElementById("slots").classList.contains("bad"), cvd: document.documentElement.classList.contains("a11y-cvd"), lock: (() => { const b = document.querySelector("#slots button.lock"); return b ? getComputedStyle(b).backgroundColor : ""; })() }));
+    check("動きを減らす設定では、まちがえても揺らさず振動もしない", cc.ans.length === 4 && m.vib === 0 && !m.bad, JSON.stringify(m));
+    check("色の見分けを助ける設定では、合った字を青（カラーユニバーサルデザインの組）にする", m.cvd && m.lock === "rgb(0, 114, 178)", JSON.stringify(m));
+    await pc.close(); }
 
   // 5. スマホ幅：はみ出さない・押せる所は44px以上・8字でもますは1行
   for (const w of [320, 390]) {
@@ -284,6 +304,12 @@ try {
   await browser.close();
 }
 check("画面のエラーが無い", errors.length === 0, errors.slice(0, 3).join(" | "));
+
+{ // 見やすさ・読みやすさ・偏り（shared-workflows template/qa/a11y.mjs の写し。routines/game-dev.md「だれでも遊べるように」）
+  const { spawnSync } = await import("node:child_process");
+  const a = spawnSync(process.execPath, [path.join(root, "qa", "a11y.mjs")], { encoding: "utf8", env: process.env });
+  check("見やすさ・読みやすさの検査（qa/a11y.mjs。中身は qa-report/a11y.md）", a.status === 0, (a.stdout.match(/^- ❌.*$/gm) || []).join(" / ") || (a.status ? a.stderr.slice(-300) : ""));
+}
 
 const ng = results.filter((r) => !r.ok);
 const md = `# ことばならべ QA\n\n${results.map((r) => `- ${r.ok ? "✅" : "❌"} ${r.name}${r.detail ? `（${r.detail}）` : ""}`).join("\n")}\n\n${ng.length ? `❌ ${ng.length}件` : `✅ ${results.length}項目すべて通過`}\n`;
