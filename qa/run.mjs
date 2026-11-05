@@ -41,7 +41,7 @@ const html = readFileSync(path.join(root, "index.html"), "utf8");
 check("終えた回を消すのは同じ回のときだけ・0時を過ぎたホームの「今日」のボタンは描き直す（2026-11-04 CodeRabbit）", /c\.date === run\.date && c\.id === run\.id\) s2\.runs\[MODE\] = null/.test(html) && /\$\("go-d"\)\.onclick = \(\) => \(k !== todayKey\(\) \? home\(\)/.test(html));
 check("別のタブで今日の分を終えたあと、古い画面から今日・上級をもう一度始めない（2026-11-04 CodeRabbit）", /\(mode === "d" && s\.days\[k\]\) \|\| \(mode === "h" && s\.hdays\[k\]\)\) return;/.test(html));
 check("README の URL のすぐ後ろに全角の字を続けない（Link check が URL の一部と読む。2026-11-04）", !/https?:\/\/[\x21-\x7e]*[^\x00-\x7f]/.test(readFileSync(new URL("../README.md", import.meta.url), "utf8").replace(/\]\(https?:\/\/[^)\s]+\)/g, "").replace(/<https?:\/\/[^>\s]+>/g, "")));
-check("別のタブで先に進んだ並べ方を、古いタブの並べ方で上書きしない（2026-11-04 CodeRabbit）", /r\.cur\.i === cur\.i && r\.cur\.moves > cur\.moves\)\) r\.cur =/.test(html));
+check("別のタブで先に進んだ並べ方を、古いタブの並べ方で上書きしない（2026-11-04 CodeRabbit）", /!\(old && old\.moves > cur\.moves\)\)/.test(html));
 { // ひな形を写したリポジトリで、README・AGENTS.md に前のゲームの名前や URL が残らない（2026-11-05 CodeRabbit）
   const docs = ["README.md", "AGENTS.md", "manifest.webmanifest", "sw.js"].map((f) => [f, readFileSync(path.join(root, f), "utf8")]);
   const left = docs.filter(([, t]) => /しりとり|shiritori|github\.io\/(?!kotoba-narabe\/)[a-z0-9-]+\//.test(t)).map(([f]) => f);
@@ -217,6 +217,13 @@ try {
     const rz = await pz.evaluate(() => window.__kn.load().runs.d.res[0]);
     check("別のタブで保存したまちがい・ヒントの数を、古いタブで答えても消さない（★を増やさない。2026-11-05 CodeRabbit）", rz && rz.m === 3 && rz.h === 1 && (await pz.locator(".verdict .stars .off").textContent()).length === 2, JSON.stringify(rz));
     await pz.close(); }
+  { // 同じ回数で古いタブが保存しても、保存済みのまちがい・ヒントを消さない
+    const py = await newPage(); await py.click("#howto-ok"); await py.click("#go-d");
+    await py.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.d.cur = { i: 0, slots: [null, null, null, null], lock: [false, false, false, false], miss: 2, hints: 1, kan: false, moves: 1 }; localStorage.setItem(k, JSON.stringify(s)); }, KEY);
+    await py.click('#tiles button[data-t="0"]');
+    const ry = await py.evaluate(() => window.__kn.load().runs.d.cur);
+    check("同じ回数で古いタブが保存しても、保存済みのまちがい・ヒントの多いほうを残す（2026-11-05 CodeRabbit）", ry && ry.miss === 2 && ry.hints === 1 && ry.moves === 1, JSON.stringify(ry));
+    await py.close(); }
   { // 保存できないブラウザでも遊べる
     const pb = await browser.newPage({ viewport: { width: 390, height: 844 } });
     pb.on("pageerror", (e) => errors.push(e.message));

@@ -290,7 +290,8 @@ function valid(p, c) {
 }
 const same = (r) => r && cur && r.date === cur.date && r.id === cur.id && r.res.length === cur.i;
 // 同じ問題で保存済みのほうが先なら、古いタブの並べ方で上書きしない
-function keep() { cur.moves++; save((s) => { const r = s.runs[MODE]; if (same(r) && !(r.cur && r.cur.i === cur.i && r.cur.moves > cur.moves)) r.cur = { i: cur.i, slots: cur.slots, lock: cur.lock, miss: cur.miss, hints: cur.hints, kan: cur.kan, moves: cur.moves }; }); }
+// 同じ回数でも、保存済みのまちがい・ヒントは多いほうを残す（古いタブの保存で★を増やさない。2026-11-05 CodeRabbit）
+function keep() { cur.moves++; save((s) => { const r = s.runs[MODE], old = r && r.cur && r.cur.i === cur.i ? r.cur : null; if (same(r) && !(old && old.moves > cur.moves)) { if (old) { cur.miss = Math.max(cur.miss, old.miss || 0); cur.hints = Math.max(cur.hints, old.hints || 0); cur.kan = cur.kan || !!old.kan; } r.cur = { i: cur.i, slots: cur.slots, lock: cur.lock, miss: cur.miss, hints: cur.hints, kan: cur.kan, moves: cur.moves }; } }); }
 function paint() {
   const p = cur.p, used = new Set(cur.slots.filter((t) => t !== null));
   $("kan").innerHTML = cur.done || cur.kan ? `${esc(p.w[0])}${cur.done ? `<small>${p.w[1]}</small>` : "<small>漢字のヒント</small>"}` : "";
