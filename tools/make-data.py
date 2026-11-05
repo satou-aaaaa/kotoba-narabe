@@ -16,6 +16,10 @@ import sqlite3, sys, collections, json, os
 
 NG = set("死殺葬屍姦淫娼尿糞呪遺棺骸刑獄墓弔喪病癌毒虐暴拷凶犯罪賊奴隷傷害戦爆銃兵敵怨憎痴災難疫患症菌腫屠骨亡惨禍")
 HERE = os.path.dirname(os.path.abspath(__file__))
+# 性別に寄った言葉（gender-ng.js。shared-workflows template/qa/a11y.mjs の WORDS）は作る段階で外す（2026-11-06 satou さん）
+import re
+with open(os.path.join(HERE, "..", "gender-ng.js"), encoding="utf-8") as f:
+    GENDER_NG = json.loads(re.search(r"var NG = (\[.*?\]);", f.read(), re.S).group(1))
 c = sqlite3.connect(sys.argv[1])
 
 def hira(s):
@@ -50,6 +54,7 @@ for idseq in sorted(kana):
     if not (rp & GOOD and kp & GOOD): continue
     if not all("ぁ" <= ch <= "ゖ" for ch in r) or r in seen: continue
     if set(kt) & NG or len(set(r)) < 3: continue
+    if any(g in kt or g in r for g in GENDER_NG): continue
     if any("0" <= ch <= "9" or "０" <= ch <= "９" for ch in kt): continue
     if anag[key(r)] != {r}: continue  # 答えは1つ
     seen.add(r)
