@@ -163,6 +163,7 @@ try {
   check("X・LINE は押したときに開くリンクだけ", /^https:\/\/twitter\.com\/intent\/tweet\?text=/.test(await page.getAttribute("#toX", "href")) && /^https:\/\/line\.me\/R\/share\?text=/.test(await page.getAttribute("#toLine", "href")));
   check("結果に3問の言葉とまちがいの数が出る", (await page.locator(".res div").count()) === 3 && (await page.textContent(".res")).includes(c.p.w[0]));
   check("ヒントを使った日は Ko-fi のひとことを出さない", (await page.locator(".kofi").count()) === 0);
+  check("今日の3問を終えると、取れた実績が結果に出る", (await page.textContent(".newach")).includes("はじめの一語"));
   await page.click("#back");
   check("ホームで連続1日・今日の結果を見るに変わる・作った言葉3", (await page.textContent(".stats")).includes("1連続の日") && (await page.textContent(".stats")).includes("3作った言葉") && (await page.textContent("#go-d")).includes("結果"));
   // 上級
@@ -172,6 +173,7 @@ try {
   check("上級の2問目は8字", (await page.locator("#tiles button").count()) === 8);
   await solveNow(page); await page.click("#next");
   check("上級を全部一発で初めて終えると、結果に Ko-fi のひとことが1行", (await page.locator(".kofi").count()) === 1 && (await page.textContent(".big")).includes("一発"));
+  check("上級の8字を一発で終えると、実績「上級に挑む」「八字を一発」が出る", /上級に挑む/.test(await page.textContent(".newach")) && /八字を一発/.test(await page.textContent(".newach")));
   await page.click("#back"); await page.click("#go-h");
   check("2回目に結果を開いても Ko-fi のひとことは出ない", (await page.locator(".kofi").count()) === 0);
   await page.click("#back");
@@ -182,7 +184,11 @@ try {
   await solveNow(page); await page.click("#next");
   const after = await page.evaluate(() => { const s = window.__kn.load(); return { days: Object.keys(s.days).length, words: s.words, seen: Object.keys(s.seen).length }; });
   check("練習は今日の記録を増やさず、作った言葉と言葉帳には入る", after.days === 1 && after.words === 6 && after.seen === expSeen && (await page.locator(".share").count()) === 0);
-  await page.click("#go-dex");
+  await page.click("#back"); await page.click("#go-ach");
+  { const got = await page.locator(".achs div.got").count(), txt = await page.textContent(".achs");
+    check("実績の画面：取れたものは★、まだのものは進み具合（一発の数は今日・上級だけで練習を数えない）", got >= 3 && txt.includes("4/10") && txt.includes(`${expSeen}/50`), `${got} ${txt.slice(0, 80)}`); }
+  check("続けて遊んだ日の最長は、日付が1日ずつ続くところだけ数える", await page.evaluate(() => window.__kn.maxStreak({ "2026-01-01": 1, "2026-01-02": 1, "2026-01-04": 1, "2026-01-05": 1, "2026-01-06": 1 }) === 3 && window.__kn.maxStreak({}) === 0));
+  await page.click("#back"); await page.click("#go-dex");
   check("言葉帳に作った言葉と字の数ごとの数が出る", (await page.locator(".dex div").count()) === expSeen && (await page.textContent(".dex")).includes(c.p.w[0]) && (await page.textContent("h1")).includes(`${expSeen}語`));
   await page.close();
 

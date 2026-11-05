@@ -102,6 +102,13 @@ dialog a{color:var(--route2);min-height:44px;display:inline-flex;align-items:cen
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;z-index:9;box-shadow:0 6px 20px #0005;max-width:90%;text-align:center}
 footer{margin-top:auto;text-align:center;font-size:12px;color:var(--ink2);display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
 footer a{color:var(--ink2);min-height:44px;display:inline-flex;align-items:center}
+.achs{display:flex;flex-direction:column;gap:8px}
+.achs div{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.achs div.got{border-color:var(--gold);background:#fffaf0}
+.achs b{font-size:15px}.achs div.got b{color:#9a6b12}
+.achs small{font-size:12px;color:var(--ink2)}
+.achs i{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--go) var(--p),var(--line) var(--p))}
+.newach{border:1px solid var(--gold);background:#fffaf0;font-weight:800;border-radius:14px;padding:12px;text-align:center;font-size:15px;line-height:1.6}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -145,7 +152,7 @@ const starStr = (s) => `<span class="stars" aria-label="星${s}つ">${"★".repe
 
 // ---- 記録（この端末の localStorage だけ）----
 // 進行中の遊びはモードごとに分けて持つ（練習を始めても今日・上級の途中経過を消さない）。seen：言葉のよみ → 作った回数
-const fresh = () => ({ v: 1, days: {}, hdays: {}, seen: {}, words: 0, runs: {}, tut: false, kofi: {} });
+const fresh = () => ({ v: 1, days: {}, hdays: {}, seen: {}, words: 0, runs: {}, tut: false, kofi: {}, ach: {} });
 let MODE = "d";
 let mem = null; // 保存できない環境では、開いているあいだだけここに置く
 // 保存に失敗したあとはメモリと保存の両方を読む。記録（日ごとの結果・言葉帳）は合わせて数は高いほう、途中経過は同じ日・同じ問題なら進んだほう
@@ -160,6 +167,26 @@ function streak(days) { let k = todayKey(), n = 0; if (!days[k]) k = prevDay(k);
 const RANKS = [[0, "言葉のたまご"], [10, "ならべ見習い"], [40, "言葉さがし"], [120, "ならべ名人"], [300, "言葉の達人"]];
 const rankOf = (n) => RANKS.filter((r) => n >= r[0]).pop()[1];
 const nextRank = (n) => RANKS.find((r) => r[0] > n);
+// 実績：腕前（一発・ヒントなし・上級）は今日の3問と上級の記録だけで数え、練習は言葉帳の数にだけ入る
+const one = (r) => r.m === 0 && !r.h;
+function maxStreak(days) { const ks = Object.keys(days).sort(); let best = 0, run = 0, prev = null; for (const k of ks) { run = prev && Date.parse(k) - Date.parse(prev) === 864e5 ? run + 1 : 1; best = Math.max(best, run); prev = k; } return best; }
+function achList(s) {
+  const okR = (x) => x && Array.isArray(x.r) && x.r.every((r) => r && typeof r.m === "number"), D = Object.values(s.days).filter(okR), H = Object.values(s.hdays).filter(okR), all = D.concat(H).flatMap((x) => x.r), seen = Object.keys(s.seen).length;
+  return [
+    ["はじめの一語", "言葉を1つ作る", s.words, 1],
+    ["一発の感覚", "今日の3問・上級で一発を10回", all.filter(one).length, 10],
+    ["一発名人", "今日の3問・上級で一発を50回", all.filter(one).length, 50],
+    ["三つとも一発", "今日の3問を全部一発で終える", D.filter((x) => x.r.every(one)).length, 1],
+    ["ヒントなしの一週間", "ヒントを使わずに今日の3問を終えた日が7日", D.filter((x) => x.r.every((r) => !r.h)).length, 7],
+    ["上級に挑む", "上級を終える", H.length, 1],
+    ["八字を一発", "上級の8字を一発で作る", H.filter((x) => x.r[1] && one(x.r[1])).length, 1],
+    ["三日つづけて", "3日続けて今日の3問を終える", maxStreak(s.days), 3],
+    ["一週間つづけて", "7日続けて今日の3問を終える", maxStreak(s.days), 7],
+    ["言葉あつめ", "言葉帳に50語", seen, 50],
+    ["言葉の蔵", "言葉帳に200語", seen, 200],
+  ].map(([name, desc, cur, goal]) => ({ name, desc, cur: Math.min(cur, goal), goal, done: cur >= goal }));
+}
+const achDone = (s) => achList(s).filter((a) => a.done).map((a) => a.name);
 
 // ---- 画面 ----
 const md = (k) => `${+k.slice(5, 7)}/${+k.slice(8, 10)}`;
@@ -184,6 +211,7 @@ function home() {
     <button class="main" id="go-d">${done ? "今日の結果を見る" : rd ? `続きから（${rd.res.length + 1}問目）` : `今日の3問を解く <small>#${dayNo(k)}</small>`}</button>
     ${done ? `<button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：7字と8字（ヒントなし）"}</button>` : ""}
     <div class="row"><button class="sub" id="go-p">練習（何度でも）</button><button class="sub" id="go-dex">言葉帳 ${Object.keys(s.seen).length}語</button></div>
+    <button class="sub" id="go-ach">実績 ${achDone(s).length}/${achList(s).length}</button>
     <div class="stats"><div><b>${streak(s.days)}</b><small>連続の日</small></div><div><b>${Object.keys(s.days).length}</b><small>遊んだ日</small></div><div><b>${s.words}</b><small>作った言葉</small></div></div>
     <p class="rank">称号：${rankOf(s.words)}${nr ? `（あと${nr[0] - s.words}語で${nr[1]}）` : ""}</p>
     ${footer()}`;
@@ -191,6 +219,7 @@ function home() {
   if ($("go-h")) $("go-h").onclick = () => (hdone ? result("h", k) : k === todayKey() ? startRun("h") : home()); // 画面を開いたまま0時を過ぎたら、翌日の上級は始めない
   $("go-p").onclick = practiceMenu;
   $("go-dex").onclick = dex;
+  $("go-ach").onclick = ach;
   bindFooter();
   if (!s.tut) openHow();
 }
@@ -329,13 +358,16 @@ function finish() {
   if (!run) return home();
   let first = false;
   const rec = recOf(run);
+  let fresh = [];
   save((s2) => {
     first = bank(s2, run);
+    // まだ知らせていない実績を、この結果の画面で知らせる（練習で取った分もここで）
+    const got = s2.ach || {}; fresh = achDone(s2).filter((n) => !got[n]); fresh.forEach((n) => { got[n] = 1; }); s2.ach = got;
     // 別のタブで同じモードの新しい回が始まっていたら、それは消さない
     const c = s2.runs[MODE]; if (c && c.date === run.date && c.id === run.id) s2.runs[MODE] = null;
   });
-  if (run.mode === "p") return result("p", run.date, false, { list: run.list, ...rec });
-  result(run.mode, run.date, first);
+  if (run.mode === "p") return result("p", run.date, false, { list: run.list, ...rec }, fresh);
+  result(run.mode, run.date, first, undefined, fresh);
 }
 // 共有の文：言葉（答え）は出さない。一発🟩・2回までまちがい🟨・それ以上🟧、ヒントを使ったら💡
 const sq = (r) => (r.h ? "💡" : r.m === 0 ? "🟩" : r.m <= 2 ? "🟨" : "🟧");
@@ -344,7 +376,7 @@ function shareText(mode, k, rec) {
   return `ことばならべ${mode === "h" ? " 上級" : ""} #${dayNo(k)} ${md(k)}\n${rec.r.map(sq).join("")}${all ? " 全部一発" : ""}`;
 }
 function untilNext() { const n = jstNow(), ms = 864e5 - (n.getTime() % 864e5); return `${Math.floor(ms / 36e5)}時間${Math.floor((ms % 36e5) / 6e4)}分`; }
-function result(mode, k, first, prec) {
+function result(mode, k, first, prec, fresh) {
   const s = load();
   const list = mode === "p" ? prec.list : mode === "d" ? dailyList(k) : hardList(k);
   const rec = mode === "p" ? prec : (mode === "d" ? s.days : s.hdays)[k];
@@ -355,6 +387,7 @@ function result(mode, k, first, prec) {
   app.innerHTML = `
     <header><button class="icon" id="back" aria-label="ホームへ">←</button><h1>ことばならべ<small>${mode === "d" ? `今日の3問 #${dayNo(k)}` : mode === "h" ? "上級" : "練習"}</small></h1><span></span></header>
     <p class="big">${all ? "全部、一発で作った！" : `${list.length}語 作った`}</p>
+    ${fresh && fresh.length ? `<div class="newach">新しい実績：${fresh.map(esc).join("・")}</div>` : ""}
     <div class="res">${list.map((it, j) => { const p = probOf(it), r = rec.r[j]; return `<div><span>${esc(p.w[0])}（${p.w[1]}）<br><small style="color:var(--ink2)">まちがい${r.m}回${r.h ? `・ヒント${r.h}` : ""}</small></span>${starStr(starsOf(r))}</div>`; }).join("")}</div>
     ${mode !== "p" ? `<div class="share">${esc(text)}</div>
     <button class="main" id="share">結果をシェア</button>
@@ -378,6 +411,16 @@ function result(mode, k, first, prec) {
   }
 }
 
+// 実績：取れたものと、まだのものの進み具合
+function ach() {
+  const L = achList(load());
+  app.innerHTML = `
+    <header><button class="icon" id="back" aria-label="ホームへ">←</button><h1>実績<small>${L.filter((a) => a.done).length}/${L.length}</small></h1><span></span></header>
+    <div class="achs">${L.map((a) => `<div class="${a.done ? "got" : ""}"><b>${a.done ? "★" : "☆"} ${esc(a.name)}</b><small>${esc(a.desc)}</small>${a.done ? "" : `<i style="--p:${Math.round((a.cur / a.goal) * 100)}%"></i><small>${a.cur}/${a.goal}</small>`}</div>`).join("")}</div>
+    ${footer()}`;
+  $("back").onclick = home;
+  bindFooter();
+}
 // 言葉帳：作った言葉を字の数ごとに数え、新しい順に並べる
 function dex() {
   const s = load(), got = new Set(Object.keys(s.seen)), rows = [];
@@ -392,7 +435,7 @@ function dex() {
   bindFooter();
 }
 
-window.__kn = { mode: () => MODE, T, dailyList, hardList, probOf, starsOf, todayKey, dayNo, shareText, streak, load, valid, cur: () => cur, put: (t) => put(t), submit: () => submit(), hint: () => hint(), play: (m) => { if (m) MODE = m; play(); } };
+window.__kn = { achList, maxStreak, mode: () => MODE, T, dailyList, hardList, probOf, starsOf, todayKey, dayNo, shareText, streak, load, valid, cur: () => cur, put: (t) => put(t), submit: () => submit(), hint: () => hint(), play: (m) => { if (m) MODE = m; play(); } };
 home();
 if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
