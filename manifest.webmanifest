@@ -1,0 +1,17 @@
+{
+  "name": "ことばならべ",
+  "short_name": "ことばならべ",
+  "description": "ばらばらの字を並べて言葉を作る1日3問の言葉パズル",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e8e4f0",
+  "theme_color": "#e8e4f0",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
