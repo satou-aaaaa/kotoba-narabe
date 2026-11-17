@@ -304,7 +304,7 @@ try {
   { // 保存できないブラウザでも遊べる
     const pb = await browser.newPage({ viewport: { width: 390, height: 844 } });
     pb.on("pageerror", (e) => errors.push(e.message));
-    await pb.addInitScript(() => { Storage.prototype.setItem = () => { throw new Error("blocked"); }; });
+    await pb.addInitScript(() => { window.__origSetItem = Storage.prototype.setItem; Storage.prototype.setItem = () => { throw new Error("blocked"); }; });
     await pb.goto(url); await pb.click("#howto-ok"); await pb.click("#go-d");
     await pb.click('#tiles button[data-t="0"]');
     check("保存できないブラウザでも、今日の1問目で進める", (await pb.textContent("header")).includes("1/3") && (await curT(pb)).slots[0] === 0);
@@ -312,6 +312,14 @@ try {
     check("保存できないブラウザでも、1問目を作れる", (await curT(pb)).done);
     await pb.click("#back");
     check("保存できないブラウザでも、遊び方が何度も開かない", !(await pb.locator("#howto[open]").count()));
+    // 保存できないことを帯 #savewarn と #live で知らせ続け、保存できるようになったら消す（shared-workflows incidents/2026-11-07-save-failure-silent.md）
+    const one = await pb.locator("#savewarn").count() === 1 && (await pb.textContent("#savewarn")).includes("保存できませんでした") && (await pb.textContent("#live")).includes("保存できませんでした");
+    await pb.waitForTimeout(2000);
+    const stay = await pb.locator("#savewarn").count() === 1;
+    await pb.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
+    await pb.click("#go-d"); await pb.waitForTimeout(150);
+    const gone = await pb.locator("#savewarn").count() === 0 && !(await pb.textContent("#live")).includes("保存できませんでした");
+    check("保存できないブラウザでは帯 #savewarn が1つ出て2秒たっても残り、保存できるようになると消える", one && stay && gone, [one, stay, gone].join(","));
     await pb.close(); }
   { // 前の記録が残っていて、書き込みだけ失敗するとき
     const pq = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -351,6 +359,13 @@ try {
     await pn.evaluate(() => { location.hash = ""; }); await pn.reload(); await pn.click("#go-p"); await pn.click('.lv button[data-lv="3"]');
     check("練習の上級（7字）も、ヒントのボタンが無い", (await pn.locator("#hint").count()) === 0 && (await pn.evaluate(() => window.__kn.cur().hard)) === true);
     await pn.close(); }
+  // 知らせ（.toast）が出ているあいだも、その下のボタンを押せる（2026-11-17 全ゲームの点検。pointer-events:none）
+  {
+    const q = await newPage(); await q.click("#howto-ok");
+    const r = await q.evaluate(() => { const d = document.createElement("div"); d.className = "toast"; d.textContent = "知らせ"; document.body.appendChild(d); const b = d.getBoundingClientRect(), el = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); const v = [getComputedStyle(d).pointerEvents, !!el && !d.contains(el)]; d.remove(); return v; });
+    check("知らせ（.toast）は押しても下のボタンに届く（pointer-events:none）", r[0] === "none" && r[1], r.join(","));
+    await q.close();
+  }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
 } finally {
